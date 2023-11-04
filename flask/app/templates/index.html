@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Transeleos. So nothing gets lost in translation"
+    />
+    <meta
+      name="keywords"
+      content="translate, youtube, videos"
+    />
+    <meta name="robots" content="noindex" />
+    <title>Transeleos</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300&family=Nunito+Sans:opsz,wght@6..12,300;6..12,400&display=swap');
+
+        body {
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            text-align: left;
+            font-family: 'Montserrat', sans-serif;
+            font-family: 'Nunito Sans', sans-serif;
+            padding: 50px 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="{{ url_for('static', filename='logo.png') }}"  style="display: block; margin: 0 auto; width: 250px; height: 200px;" alt="Transeleos logo">
+
+        <p>
+            All content is the property of the content creators and Google LLC <br/>
+            Transeleos is merely a bridge. <br/>
+            It's a freely available tool, and I own nothing and neither do I want to lay any claim to anyone's IP. <br />
+            The translations don't claim to be perfect. There will be flaws, but I'll work on finding the best solution for the next version <br />
+        </p>
+
+
+        <br />
+        <h4>
+            v1 limitations (I'll try to add these to v2):
+        </h4>
+        <ol>
+            <li>Not the creators voice in a different language</li>
+            <li>Only male voices for now</li>
+            <li>limited output languages</li>
+            <li>1 GPU</li>
+            <li>10 min video limit</li>
+        </ol>
+        <br/>
+
+        <p>
+            I came across an ML paper which I couldn't understand. The only resource I found was a YouTube video in Korean. <br />
+            Since I couldn't understand it, I tried researching some more. <br/>
+            But after failing to find any other resource except the 1 Korean video, I figured I'll just convert it myself. <br />
+            Once I did that, I figured there might be others like me looking to translate obscure videos, so I built this extension out. <br />
+            It will be a little slow as I'm only using one GPU to prevent exorbitant costs to keep this free for everyone. Enjoy!
+        </p>
+
+        <br />
+        <p>
+            Please consider donating. Thank you. <br/>
+            <a href="https://paypal.me/dhxmo" target="_blank">PayPal</a> or BTC: 14BpYV81xfVt19UNaBdnPKcY1NVh6aeVe4 <br/>
+        </p>
+
+        <br />
+        <footer>You can drop me a message at transeleos@gmail.com</footer>
+    </div>
+</body>
+</html>
