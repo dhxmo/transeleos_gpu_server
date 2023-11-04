@@ -54,7 +54,7 @@ def transeleos(video_url, output_lang):
 
         print("tts-ing")
         mp3_path, s3_url = bark_stt(video_id=video_id, input_text=final_trans,
-                                    output_lang=output_lang, s3_object_key=s3_object_key)
+                                                        output_lang=output_lang, s3_object_key=s3_object_key)
 
         try:
             print("deleting local files")
@@ -288,7 +288,9 @@ def bark_stt(video_id, input_text, output_lang, s3_object_key):
         # Convert the WAV audio to MP3 using pydub
         audio_segment = AudioSegment.from_wav(wav_io)
         mp3_path = os.path.join('output', f'{video_id}_{output_lang}.mp3')
-        audio_segment.export(mp3_path, format="mp3")
+
+        bit_rate = '64k'
+        audio_segment.export(mp3_path, format="mp3", parameters=['-b:a', bit_rate])
 
         # Close and delete the in-memory WAV file
         wav_io.close()
