@@ -26,8 +26,6 @@ s3 = boto3.client('s3',
 
 
 def transeleos(video_url, output_lang):
-    # TODO: check if video_url <> output_lang exists in s3
-
     # Parse the URL to extract the video ID
     parsed_url = urlparse(video_url)
     query_parameters = parse_qs(parsed_url.query)
@@ -52,24 +50,22 @@ def transeleos(video_url, output_lang):
         _, audio_file = extract_audio(video_url=video_url, video_id=video_id)
 
         print("translating")
-        # TODO: offload to GPU
         final_trans = translate_to_output_lang(audio_file, output_lang)
 
         print("tts-ing")
-        # TODO: offload to GPU
         mp3_path, s3_url = bark_stt(video_id=video_id, input_text=final_trans,
                                     output_lang=output_lang, s3_object_key=s3_object_key)
 
         try:
             print("deleting local files")
-            delete_files(audio_file)
-            delete_files(mp3_path)
+            delete_file(audio_file)
+            delete_file(mp3_path)
         except Exception as e:
             logging.error("error deleting files: ", str(e))
     return s3_url
 
 
-def delete_files(file_to_be_deleted):
+def delete_file(file_to_be_deleted):
     try:
         if os.path.exists(file_to_be_deleted):
             os.remove(file_to_be_deleted)
@@ -93,7 +89,7 @@ def extract_audio(video_url, video_id):
 
         s3_url = f'https://{Config.S3_BUCKET_NAME}.s3.ap-south-1.amazonaws.com/{s3_object_key}'
     except Exception as e:
-        print("doesnt exist, exta=racting and downloading")
+        print("doesnt exist, extracting and downloading")
         # Extract youtube audio from url
         is_audio_extracted = extract_audio_yt(video_url=video_url, video_id=video_id)
 
@@ -236,18 +232,14 @@ def process_chunk(model, chunk, output_lang):
 
 def bark_stt(video_id, input_text, output_lang, s3_object_key):
     # Initialize the processor and model
-    processor = AutoProcessor.from_pretrained("suno/bark-small")
-    model = BarkModel.from_pretrained("suno/bark-small")
-    # processor = AutoProcessor.from_pretrained("suno/bark")
-    # model = BarkModel.from_pretrained("suno/bark")
+    processor = AutoProcessor.from_pretrained("suno/bark")
+    model = BarkModel.from_pretrained("suno/bark")
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
 
-    # TODO: remove this for gpu. ucomment input_text,replace
     # Define the script to be processed
-    # script = input_text.replace("\n", " ").strip()
-    script = " मुझे समझ नहीं आया"
+    script = input_text.replace("\n", " ").strip()
 
     # Tokenize the script into sentences using nltk
     sentences = nltk.sent_tokenize(script)
