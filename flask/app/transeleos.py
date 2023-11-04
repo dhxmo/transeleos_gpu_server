@@ -51,6 +51,7 @@ def transeleos(video_url, output_lang):
 
         print("translating")
         final_trans = translate_to_output_lang(audio_file, output_lang)
+        print("final_trans", final_trans)
 
         print("tts-ing")
         mp3_path, s3_url = bark_stt(video_id=video_id, input_text=final_trans,
@@ -171,7 +172,9 @@ def translate_to_output_lang(audio_file, output_lang):
     # Check if CUDA is available
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-    model = whisper.load_model("v2-large", device=device)
+    model = whisper.load_model("base", device=device)
+    # TODO: uncomment for prod
+    # model = whisper.load_model("large-v2", device=device)
     model = model.to(device)
 
     # Split audio into non-silent chunks
@@ -181,59 +184,113 @@ def translate_to_output_lang(audio_file, output_lang):
                                          silence_thresh=-25,  # dB
                                          keep_silence=True)
 
-    # Initialize an empty list to store futures for parallel processing
-    chunk_futures = []
+    # Assuming non_silent_chunks is a list of AudioSegment objects
+    combined = AudioSegment.empty()
 
-    # Process each chunk in parallel and store the futures
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        for chunk in non_silent_chunks:
-            future = executor.submit(process_chunk, model, chunk, output_lang)
-            chunk_futures.append(future)
+    for chunk in non_silent_chunks:
+        audio = AudioSegment.from_wav(chunk)
+        combined += audio
 
-    # Wait for all futures to complete and get the translated texts
-    translated_chunks = [future.result() for future in chunk_futures]
-    final_translation = " ".join(translated_chunks)
-
-    return final_translation
-
-
-# Function to process each chunk
-def process_chunk(model, chunk, output_lang):
-    audio = AudioSegment.from_wav(chunk)
+    # Create a temporary file
     temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    temp_name = temp.name
-    audio.export(temp_name, format="wav")
 
-    prompt = """Transcribe the audio and include the following for higher accuracy:
+    # Get the name of the temporary file
+    temp_name = temp.name
+
+    # Export the combined audio to the temporary file
+    combined.export(temp_name, format="wav")
+
+    # Close the temporary file
+    temp.close()
+
+    prompt = """
+            You must observe the track and add the following:
             if a man is speaking add '[MAN]' at the beginning of the sentence.
             if a woman is speaking add '[WOMAN]' at the beginning of the sentence.
-            add '[laughter]' if there is laughter in the track.
-            add '[laughs]' if the main speaker laughs in the track.
-            add '[sighs]' if there is a sigh in the track.
-            add '[music]' if there is a melody in the track
-            add '[gasps]' if someone gasps in the track.
-            add '[clears throat]' if someone clears throat in the track.
+            add (with brackets) '[laughter]' if there is laughter in the track.
+            add (with brackets) '[laughs]' if the main speaker laughs in the track.
+            add (with brackets) '[sighs]' if there is a sign in the track.
+            add (with brackets) '[music]' if there is a melody in the track
+            add (with brackets) '[gasps]' if someone gasps in the track.
+            add (with brackets) '[clears throat]' if someone clears throat in the track.
             add '—' or '...' if someone hesitates in the track.
             add '♪'  if there are any song lyrics in the track.
             capitalize a word if a word has been emphasized in the track.
             """
 
-    result = model.transcribe(temp_name, fp16=True, initial_prompt=prompt)
+    # fp16=False for cpu, remove for gpu
+    # TODO: uncomment for prod
+    result = model.transcribe(audio_file, fp16=False, initial_prompt=prompt)
+    # result = model.transcribe(audio_file, fp16=True, initial_prompt=prompt)
+
     text = result['text']
+    print("text", text)
 
-    # Translate the text
-    translated_text = GoogleTranslator(source='auto', target=output_lang).translate(text=text)
-
-    # Clean up the temporary file
+    # Delete the temporary file
     os.remove(temp_name)
 
-    return translated_text
+    final_translation = GoogleTranslator(source='auto', target=output_lang).translate(text=text)
+    print("translated", final_translation)
+
+    # TODO: for v2 parallel process
+    # Initialize an empty list to store futures for parallel processing
+    # chunk_futures = []
+
+    # Process each chunk in parallel and store the futures
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    #     for chunk in non_silent_chunks:
+    #         future = executor.submit(process_chunk, model, chunk, output_lang)
+    #         chunk_futures.append(future)
+    #
+    # # Wait for all futures to complete and get the translated texts
+    # translated_chunks = [future.result() for future in chunk_futures]
+    # final_translation = " ".join(translated_chunks)
+
+    return final_translation
+
+
+# # Function to process each chunk
+# def process_chunk(model, chunk, output_lang):
+#     audio = AudioSegment.from_wav(chunk)
+#     temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+#     temp_name = temp.name
+#     audio.export(temp_name, format="wav")
+#
+#     prompt = """Transcribe the audio and include the following for higher accuracy:
+#             if a man is speaking add '[MAN]' at the beginning of the sentence.
+#             if a woman is speaking add '[WOMAN]' at the beginning of the sentence.
+#             add '[laughter]' if there is laughter in the track.
+#             add '[laughs]' if the main speaker laughs in the track.
+#             add '[sighs]' if there is a sigh in the track.
+#             add '[music]' if there is a melody in the track
+#             add '[gasps]' if someone gasps in the track.
+#             add '[clears throat]' if someone clears throat in the track.
+#             add '—' or '...' if someone hesitates in the track.
+#             add '♪'  if there are any song lyrics in the track.
+#             capitalize a word if a word has been emphasized in the track.
+#             """
+#
+#     # TODO: uncomment for prod
+#     result = model.transcribe(temp_name, fp16=False, initial_prompt=prompt)
+#     # result = model.transcribe(temp_name, fp16=True, initial_prompt=prompt)
+#     text = result['text']
+#
+#     # Translate the text
+#     translated_text = GoogleTranslator(source='auto', target=output_lang).translate(text=text)
+#
+#     # Clean up the temporary file
+#     os.remove(temp_name)
+#
+#     return translated_text
 
 
 def bark_stt(video_id, input_text, output_lang, s3_object_key):
+    # TODO: uncomment for prod
     # Initialize the processor and model
-    processor = AutoProcessor.from_pretrained("suno/bark")
-    model = BarkModel.from_pretrained("suno/bark")
+    processor = AutoProcessor.from_pretrained("suno/bark-small")
+    model = BarkModel.from_pretrained("suno/bark-small")
+    # processor = AutoProcessor.from_pretrained("suno/bark")
+    # model = BarkModel.from_pretrained("suno/bark")
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
@@ -288,9 +345,7 @@ def bark_stt(video_id, input_text, output_lang, s3_object_key):
         # Convert the WAV audio to MP3 using pydub
         audio_segment = AudioSegment.from_wav(wav_io)
         mp3_path = os.path.join('output', f'{video_id}_{output_lang}.mp3')
-
-        bit_rate = '64k'
-        audio_segment.export(mp3_path, format="mp3", parameters=['-b:a', bit_rate])
+        audio_segment.export(mp3_path, format="mp3")
 
         # Close and delete the in-memory WAV file
         wav_io.close()
