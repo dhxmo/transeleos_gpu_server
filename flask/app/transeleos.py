@@ -221,8 +221,8 @@ def coqui_tts(video_id, input_audio_file, final_translation, output_lang, s3_obj
     mp3_path = os.path.join('output', f'{video_id}_{output_lang}.mp3')
 
     # Get device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    print("ttsing on device=============", device)
     tts_models = {
         "bg": "tts_models/bg/cv/vits",
         "cs": "tts_models/cs/cv/vits",
