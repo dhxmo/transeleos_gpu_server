@@ -180,57 +180,6 @@ def translate_to_output_lang(audio_file, output_lang):
                                          silence_thresh=-25,  # dB
                                          keep_silence=True)
 
-    # ###################
-    # # Assuming non_silent_chunks is a list of AudioSegment objects
-    # combined = AudioSegment.empty()
-    #
-    # for chunk in non_silent_chunks:
-    #     audio = AudioSegment.from_wav(chunk)
-    #     combined += audio
-    #
-    # # Create a temporary file
-    # temp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    #
-    # # Get the name of the temporary file
-    # temp_name = temp.name
-    #
-    # # Export the combined audio to the temporary file
-    # combined.export(temp_name, format="wav")
-    #
-    # # Close the temporary file
-    # temp.close()
-    #
-    # prompt = """
-    #         You must observe the track and add the following:
-    #         if a man is speaking add '[MAN]' at the beginning of the sentence.
-    #         if a woman is speaking add '[WOMAN]' at the beginning of the sentence.
-    #         add (with brackets) '[laughter]' if there is laughter in the track.
-    #         add (with brackets) '[laughs]' if the main speaker laughs in the track.
-    #         add (with brackets) '[sighs]' if there is a sign in the track.
-    #         add (with brackets) '[music]' if there is a melody in the track
-    #         add (with brackets) '[gasps]' if someone gasps in the track.
-    #         add (with brackets) '[clears throat]' if someone clears throat in the track.
-    #         add '—' or '...' if someone hesitates in the track.
-    #         add '♪'  if there are any song lyrics in the track.
-    #         capitalize a word if a word has been emphasized in the track.
-    #         """
-    #
-    # # fp16=False for cpu, remove for gpu
-    # # TODO: uncomment for prod
-    # result = model.transcribe(audio_file, fp16=False, initial_prompt=prompt)
-    # # result = model.transcribe(audio_file, fp16=True, initial_prompt=prompt)
-    #
-    # text = result['text']
-    # print("text", text)
-    #
-    # # Delete the temporary file
-    # os.remove(temp_name)
-    #
-    # final_translation = GoogleTranslator(source='auto', target=output_lang).translate(text=text)
-    # print("translated", final_translation)
-    # ####################################
-
-    # TODO: for v2 parallel process
     # Initialize an empty list to store futures for parallel processing
     chunk_futures = []
 
@@ -254,22 +203,8 @@ def process_chunk(model, chunk, output_lang):
     temp_name = temp.name
     audio.export(temp_name, format="wav")
 
-    prompt = """Transcribe the audio and include the following for higher accuracy:
-            if a man is speaking add '[MAN]' at the beginning of the sentence.
-            if a woman is speaking add '[WOMAN]' at the beginning of the sentence.
-            add (with square brackets) '[laughter]' if there is laughter in the track.
-            add (with square brackets) '[laughs]' if the main speaker laughs in the track.
-            add (with square brackets) '[sighs]' if there is a sigh in the track.
-            add (with square brackets) '[music]' if there is a melody in the track
-            add (with square brackets) '[gasps]' if someone gasps in the track.
-            add (with square brackets) '[clears throat]' if someone clears throat in the track.
-            add '—' or '...' if someone hesitates in the track.
-            add '♪'  if there are any song lyrics in the track.
-            capitalize a word if a word has been emphasized in the track.
-            """
-
     # TODO: uncomment for prod
-    result = model.transcribe(temp_name, fp16=False, initial_prompt=prompt)
+    result = model.transcribe(temp_name, fp16=False)
     # result = model.transcribe(temp_name, fp16=True, initial_prompt=prompt)
     text = result['text']
 
