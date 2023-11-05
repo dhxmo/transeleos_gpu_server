@@ -1,33 +1,15 @@
-import logging
-
+from backoff import on_exception, expo
 from flask import request, jsonify
-from ratelimit import limits
+from ratelimit import limits, RateLimitException
 
 from . import app
-from .config import Config
 from .transeleos import transeleos
 
 
+@on_exception(expo, RateLimitException, max_tries=5)
 @limits(calls=1, period=10)
 @app.route('/store_translated_audio', methods=['GET'])
 def gpu_translate_to_output_lang():
-    # client_ip = request.remote_addr
-
-    # # TODO: uncomment for prod
-    # if client_ip == Config.ALLOWED_IP:
-    #     # Get the video URL from the 'url' query parameter
-    #     video_url = request.args.get('url')
-    #     output_lang = request.args.get('language')
-    #
-    #     if not video_url and not output_lang:
-    #         return jsonify({'error': 'Missing "url" parameter'}), 400
-    #
-    #     s3_url = transeleos(video_url, output_lang)
-    #
-    #     return s3_url
-    # else:
-    #     logging.error("invalid request")
-
     # Get the video URL from the 'url' query parameter
     video_url = request.args.get('url')
     output_lang = request.args.get('language')
@@ -37,12 +19,4 @@ def gpu_translate_to_output_lang():
 
     s3_url = transeleos(video_url, output_lang)
 
-    print("return s3 url from server", s3_url)
-    print("final res", jsonify({"message": "success", "s3Url": s3_url}))
-
     return jsonify({"message": "success", "s3Url": s3_url}), 200
-
-
-@app.route('/ping', methods=['GET'])
-def ping():
-    return "pong"
