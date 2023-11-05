@@ -38,3 +38,8 @@ def gpu_translate_to_output_lang():
     s3_url = transeleos(video_url, output_lang)
 
     return s3_url
+
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    return "pong"
