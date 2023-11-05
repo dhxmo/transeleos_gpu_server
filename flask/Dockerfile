@@ -32,5 +32,5 @@ FROM base
 COPY --from=intermediate /app /app
 
 # Command to run Flask application with Gunicorn
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "--access-logfile", "-", "--error-logfile", "-", "run:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "--access-logfile", "-", "--error-logfile", "-", "--timeout", "12000", "run:app"]
 
