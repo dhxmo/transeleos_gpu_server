@@ -37,6 +37,8 @@ def gpu_translate_to_output_lang():
 
     s3_url = transeleos(video_url, output_lang)
 
+    print("return s3 url from server", s3_url)
+
     return jsonify({"message": "success", "s3Url": s3_url}), 200
 
 
