@@ -1,5 +1,4 @@
 import concurrent.futures
-import io
 import logging
 import os
 import subprocess
@@ -7,16 +6,13 @@ import tempfile
 from urllib.parse import parse_qs, urlparse
 
 import boto3
-import nltk
-import numpy as np
-import scipy
 import torch
 import whisper
 import youtube_dl
+from TTS.api import TTS
 from deep_translator import GoogleTranslator
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
-from transformers import AutoProcessor, BarkModel
 
 from .config import Config
 
@@ -47,19 +43,19 @@ def transeleos(video_url, output_lang):
         print("final file desn't exist, extracting audio")
 
         # extract audio from youtube video. if s3 already exists, return s3_url
-        _, audio_file = extract_audio(video_url=video_url, video_id=video_id)
+        _, yt_audio_file = extract_audio(video_url=video_url, video_id=video_id)
 
         print("translating")
-        final_trans = translate_to_output_lang(audio_file, output_lang)
+        final_trans = translate_to_output_lang(yt_audio_file, output_lang)
         print("final_trans", final_trans)
 
         print("tts-ing")
-        mp3_path, s3_url = bark_stt(video_id=video_id, input_text=final_trans,
-                                                        output_lang=output_lang, s3_object_key=s3_object_key)
-
+        mp3_path, s3_url = coqui_tts(video_id=video_id, input_audio_file=yt_audio_file,
+                                     final_translation=final_trans, output_lang=output_lang,
+                                     s3_object_key=s3_object_key)
         try:
             print("deleting local files")
-            delete_file(audio_file)
+            delete_file(yt_audio_file)
             delete_file(mp3_path)
         except Exception as e:
             logging.error("error deleting files: ", str(e))
@@ -286,77 +282,53 @@ def process_chunk(model, chunk, output_lang):
     return translated_text
 
 
-def bark_stt(video_id, input_text, output_lang, s3_object_key):
-    # TODO: uncomment for prod
-    # Initialize the processor and model
-    processor = AutoProcessor.from_pretrained("suno/bark-small")
-    model = BarkModel.from_pretrained("suno/bark-small")
-    # processor = AutoProcessor.from_pretrained("suno/bark")
-    # model = BarkModel.from_pretrained("suno/bark")
+def coqui_tts(video_id, input_audio_file, final_translation, output_lang, s3_object_key):
+    mp3_path = os.path.join('output', f'{video_id}_{output_lang}.mp3')
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    model = model.to(device)
+    # Get device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Define the script to be processed
-    script = input_text.replace("\n", " ").strip()
-
-    # Tokenize the script into sentences using nltk
-    sentences = nltk.sent_tokenize(script)
-
-    # Initialize an empty list to store audio arrays
-    audio_arrays = []
-
-    voices_map = {
-        "en": "v2/en_speaker_6",
-        "zh": "v2/zh_speaker_0",
-        "fr": "v2/fr_speaker_3",
-        "de": "v2/de_speaker_4",
-        "hi": "v2/hi_speaker_6",
-        "it": "v2/it_speaker_8",
-        "ja": "v2/ja_speaker_2",
-        "po": "v2/pl_speaker_2",
-        "pt": "v2/pt_speaker_2",
-        "ru": "v2/ru_speaker_0",
-        "es": "v2/es_speaker_0",
-        "tr": "v2/tr_speaker_3"
+    tts_models = {
+        "bg": "tts_models/bg/cv/vits",
+        "cs": "tts_models/cs/cv/vits",
+        "da": "tts_models/da/cv/vits",
+        "et": "tts_models/et/cv/vits",
+        "en": "tts_models/en/ek1/tacotron2",
+        "es": "tts_models/es/mai/tacotron2-DDC",
+        "fr": "tts_models/fr/mai/tacotron2-DDC",
+        "zh-CN": "tts_models/zh-CN/baker/tacotron2-DDC-GST",
+        "nl": "tts_models/nl/mai/tacotron2-DDC",
+        "de": "tts_models/de/thorsten/tacotron2-DDC",
+        "ja": "tts_models/ja/kokoro/tacotron2-DDC",
+        "tr": "tts_models/tr/common-voice/glow-tts",
+        "it": "tts_models/it/mai_male/glow-tts",
+        "hu": "tts_models/hu/css10/vits",
+        "el": "tts_models/el/cv/vits",
+        "fi": "tts_models/fi/css10/vits",
+        "hr": "tts_models/hr/cv/vits",
+        "lt": "tts_models/lt/cv/vits",
+        "lv": "tts_models/lv/cv/vits",
+        "mt": "tts_models/mt/cv/vits",
+        "ro": "tts_models/ro/cv/vits",
+        "sk": "tts_models/sk/cv/vits",
+        "sl": "tts_models/sl/cv/vits",
+        "sv": "tts_models/sv/cv/vits",
+        "fa": "tts_models/fa/custom/glow-tts"
     }
+    lang_model = tts_models[output_lang]
 
-    voice = voices_map[output_lang]
-
-    # Process each sentence in parallel
-    def process_sentence(sentence):
-        inputs = processor(sentence, voice_preset=voice)
-        audio_array = model.generate(**inputs)
-        audio_array = audio_array.cpu().numpy().squeeze()
-        return audio_array
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        audio_arrays = list(executor.map(process_sentence, sentences))
-
-    # Concatenate the audio arrays
-    final_audio_array = np.concatenate(audio_arrays)
-
-    # Get the sample rate
-    sample_rate = model.generation_config.sample_rate
+    tts = TTS(lang_model).to(device)
 
     try:
-        # Create an in-memory WAV file
-        wav_io = io.BytesIO()
-        scipy.io.wavfile.write(wav_io, rate=sample_rate, data=final_audio_array)
+        # voice cloning
+        tts.tts_with_vc_to_file(
+            final_translation,
+            speaker_wav=input_audio_file,
+            file_path=mp3_path
+        )
 
-        # Convert the WAV audio to MP3 using pydub
-        audio_segment = AudioSegment.from_wav(wav_io)
-        mp3_path = os.path.join('output', f'{video_id}_{output_lang}.mp3')
-        audio_segment.export(mp3_path, format="mp3")
-
-        # Close and delete the in-memory WAV file
-        wav_io.close()
-
-        try:
-            s3.upload_file(mp3_path, Config.S3_BUCKET_NAME, s3_object_key)
-            s3_url = f'https://{Config.S3_BUCKET_NAME}.s3.ap-south-1.amazonaws.com/{s3_object_key}'
-            return mp3_path, s3_url
-        except Exception as e:
-            logging.error(f'Failed to upload audio to S3: {str(e)}')
+        s3.upload_file(mp3_path, Config.S3_BUCKET_NAME, s3_object_key)
+        s3_url = f'https://{Config.S3_BUCKET_NAME}.s3.ap-south-1.amazonaws.com/{s3_object_key}'
+        return mp3_path, s3_url
     except Exception as e:
-        logging.error("error writing file:", str(e))
+        logging.error(f'Failed to upload audio to S3: {str(e)}')
